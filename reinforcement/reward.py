@@ -8,10 +8,9 @@ async def reward_function(tokenizer, output_dict, modules, max_error_checks=5):
     Score generated example by writing out source with imports + generated token text + ' sorry',
     then running lake lean on it. Scores:
 
-    - Nonzero exit code: raise RuntimeError (fatal)
-    - stderr is exactly one line ending with "warning: declaration uses 'sorry'": +1
-    - stderr contains "syntax error": -10
-    - Otherwise: -max(n_errors, 5)/5 where n_errors is count of lines in stderr
+    - Ill formed: -10
+    - Well formed, but error: -1
+    - No errors: +1
 
     Args:
         output_dict: dict from generate_mathlib_example with keys "tokens", "prompt_ids" ...
@@ -57,6 +56,6 @@ async def reward_function(tokenizer, output_dict, modules, max_error_checks=5):
         return 1.0, stdout_lines
 
     n_errors = len(error_lines)
-    penalty = -max(n_errors, 5) / 5
+    penalty = -min(n_errors, 5) / 5
 
     return penalty, stdout_lines
