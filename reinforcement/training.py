@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 
-import asyncio
 import math
 
-from tokenizers import Tokenizer
 import torch
 from torch.nn.functional import one_hot
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from dapo import dapo_loss_vectorized
-from models.smollm import LlamaForCausalLM
-from sample_examples import sample_examples, save_data_dir
-from scripts.tokenize_lean_repository import VOCAB_SIZE
+from loss.dapo import dapo_loss_vectorized
+from reinforcement.examples import sample_examples, save_data_dir
 
 
 def form_groups(examples, group_size):
@@ -220,7 +216,7 @@ def get_logits_with_prompt_batch(
     return logits_generated
 
 
-async def train_rl_loop(
+async def training_loop(
     tokenizer,
     model,
     device,
@@ -313,62 +309,3 @@ async def train_rl_loop(
                             f"Epoch {epoch+1} Step {step+1} Avg Loss {avg_loss:.4f}"
                         )
                     total_loss = 0.0
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="RL fine-tune with DAPO loss")
-    parser.add_argument(
-        "--init_checkpoint",
-        type=str,
-        required=True,
-        help="Path to pretrained checkpoint",
-    )
-    parser.add_argument(
-        "--checkpoint",
-        type=str,
-        required=False,
-        help="Path at which to save recent checkpoint",
-    )
-    parser.add_argument(
-        "--tokenizer_path",
-        type=str,
-        required=True,
-        help="Path to the tokenizer model",
-    )
-    parser.add_argument(
-        "--rounds",
-        type=int,
-        default=3,
-        help="Number of rounds of generating samples then reinforcing",
-    )
-    parser.add_argument("--epochs", type=int, default=3, help="Number of epochs")
-    parser.add_argument("--group_size", type=int, default=10)
-    parser.add_argument("--batch_size", type=int, default=1)
-    parser.add_argument("--lr", type=float, default=5e-5)
-    args = parser.parse_args()
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # Load tokenizer
-    tokenizer = Tokenizer.from_file(args.tokenizer_path)
-    pad_token_id = tokenizer.token_to_id("<pad>")
-    # Load model
-    model = LlamaForCausalLM(vocab_size=VOCAB_SIZE)
-    ckpt = torch.load(args.init_checkpoint, map_location=device)
-    model.load_state_dict(ckpt["model_state_dict"])
-
-    asyncio.run(
-        train_rl_loop(
-            tokenizer,
-            model,
-            device=device,
-            group_size=args.group_size,
-            batch_size=args.batch_size,
-            epochs=args.epochs,
-            rounds=args.rounds,
-            lr=args.lr,
-            recent_ckpt_path=args.checkpoint,
-            pad_token_id=pad_token_id,
-        )
-    )
