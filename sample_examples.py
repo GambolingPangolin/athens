@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import json
+import os
 import random
 from tokenizers import Tokenizer
 import torch
@@ -10,6 +11,8 @@ from tqdm.asyncio import tqdm_asyncio
 
 from models.smollm import LlamaForCausalLM
 from lean_interop import run_lake_lean_example
+
+CONCURRENT_SAMPLES = 25
 
 
 def generate_mathlib_example(
@@ -78,9 +81,9 @@ def generate_mathlib_example(
                 break
 
     return {
-        "prompt_ids": prompt_ids,
-        "tokens": generated_ids,
-        "logits": logits_list,
+        "prompt_ids": torch.tensor(prompt_ids),
+        "tokens": torch.tensor(generated_ids),
+        "logits": torch.stack(logits_list),
         "stop_reason": stop_reason,
     }
 
@@ -109,7 +112,7 @@ async def reward_function(tokenizer, output_dict, modules, max_error_checks=5):
     prompt_lines.append("example ")
     prompt_text = "\n".join(prompt_lines)
     generated_text = tokenizer.decode(
-        output_dict["tokens"]
+        output_dict["tokens"].tolist()
     )  # assume 'tokenizer' accessible here
     source_text = prompt_text + generated_text + " sorry"
 
@@ -144,44 +147,71 @@ async def reward_function(tokenizer, output_dict, modules, max_error_checks=5):
     return penalty, stdout_lines
 
 
-def examples_to_serializable(examples):
+def save_data_dir(examples, dirpath):
     """
-    Convert list of output dicts to JSON-serializable form:
-    - Convert logits tensors to lists (optional: skip if large)
-    - Add 'score' and decoded 'text' fields if present
+    Save examples to a directory with:
+    - JSON file 'examples.json' containing texts and scores
+    - Torch file 'examples.pt' containing prompt_ids, tokens, logits, scores tensors
+    Creates directory if missing and overwrites files.
     """
-    serializable = []
-    for example in examples:
-        example_copy = dict(example)
-        # Convert logits tensors to lists (can be large!)
-        if "logits" in example_copy:
-            # Convert each tensor in logits list to nested lists
-            example_copy["logits"] = [
-                logits.cpu().tolist() for logits in example_copy["logits"]
-            ]
-        # score usually numeric, no change needed
-        serializable.append(example_copy)
-    return serializable
+    os.makedirs(dirpath, exist_ok=True)
+    json_path = os.path.join(dirpath, "examples.json")
+    torch_path = os.path.join(dirpath, "examples.pt")
+
+    # Save JSON with text and score
+    with open(json_path, "w") as f:
+        json.dump(
+            [
+                {
+                    "score": ex.get("score"),
+                    "text": ex["text"],
+                    "lean_output": ex["lean_output"],
+                    "stop_reason": ex["stop_reason"],
+                }
+                for ex in examples
+            ],
+            f,
+            indent=2,
+        )
+
+    # Save tensors compactly
+    data_to_save = {
+        "prompt_ids": [],
+        "tokens": [],
+        "logits": [],
+        "scores": torch.tensor([ex["score"] for ex in examples]),
+    }
+
+    for ex in examples:
+        data_to_save["prompt_ids"].append(ex["prompt_ids"])
+        data_to_save["tokens"].append(ex["tokens"])
+        data_to_save["logits"].append(ex["logits"])
+
+    torch.save(data_to_save, torch_path)
 
 
-def save_examples_json(examples, filename):
-    serializable = examples_to_serializable(examples)
-    with open(filename, "w", encoding="utf-8") as f:
-        json.dump(serializable, f, indent=2)
+def load_data_dir(dirpath):
+    """
+    Load examples from directory containing 'examples.json' and 'examples.pt'.
 
+    Returns a dict with keys:
+      - 'examples' from JSON (list of dict with text and score)
+      - 'prompt_ids', 'tokens', 'logits', 'scores' tensors from .pt file
+    """
+    json_path = os.path.join(dirpath, "examples.json")
+    torch_path = os.path.join(dirpath, "examples.pt")
 
-def load_examples_json(filename):
-    with open(filename, "r", encoding="utf-8") as f:
-        loaded = json.load(f)
-    # logits are nested lists, can convert back to tensors if needed
-    # Example conversion if desired:
-    for out in loaded:
-        if "logits" in out:
-            out["logits"] = [torch.tensor(logits) for logits in out["logits"]]
-    return loaded
+    with open(json_path, "r", encoding="utf-8") as f:
+        examples = json.load(f)
 
+    data_tensors = torch.load(torch_path)
 
-CONCURRENT_SAMPLES = 25
+    for ix, example in enumerate(examples):
+        example["prompt_ids"] = data_tensors["prompt_ids"][ix]
+        example["tokens"] = data_tensors["tokens"][ix]
+        example["logits"] = data_tensors["logits"][ix]
+
+    return examples
 
 
 async def sample_examples(tokenizer, model, device, n_examples):
@@ -231,7 +261,7 @@ async def sample_examples(tokenizer, model, device, n_examples):
                 max_gen_tokens=100,
             )
 
-            example["text"] = tokenizer.decode(example["tokens"])
+            example["text"] = tokenizer.decode(example["tokens"].tolist())
 
             # Compute reward score
             try:
@@ -284,4 +314,4 @@ if __name__ == "__main__":
     model.load_state_dict(checkpoint["model_state_dict"])
 
     examples = sample_examples(tokenizer, model, device, args.n_examples)
-    save_examples_json(examples, args.examples_path)
+    save_data_dir(examples, args.examples_path)

@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from dapo import dapo_loss_vectorized
 from models.smollm import LlamaForCausalLM
-from sample_examples import sample_examples, save_examples_json
+from sample_examples import sample_examples, save_data_dir
 from scripts.tokenize_lean_repository import VOCAB_SIZE
 
 
@@ -96,21 +96,23 @@ class ExampleGroupDataset(Dataset):
         ).float()
 
         for ex in group:
-            seq_len = len(ex["tokens"])
+            seq_len = ex["tokens"].shape[0]
             # Pad actions with pad_token_id to max_len
-            padded_actions = ex["tokens"] + [self.pad_token_id] * (max_len - seq_len)
-            actions.append(torch.tensor(padded_actions))
+            padded_actions = torch.cat(
+                [ex["tokens"], torch.tensor([self.pad_token_id] * (max_len - seq_len))],
+            ).to(dtype=torch.long)
+            actions.append(padded_actions)
 
             # Pad logits with one-hot of pad_token_id
-            logits_per_token = torch.stack(ex["logits"])
+            logits = ex["logits"]
             # Pad logits to max_len with one-hot vectors for pad token
             num_pad = max_len - seq_len
             if num_pad > 0:
                 pad_logits = torch.stack([pad_vec] * num_pad)
-                logits_per_token = torch.cat([logits_per_token, pad_logits])
-            old_logits.append(logits_per_token)
+                logits = torch.cat([logits, pad_logits])
+            old_logits.append(logits)
 
-            rewards.append(ex.get("score", 0.0))
+            rewards.append(ex["score"])
 
         actions = torch.stack(actions)  # [G, max_len]
         old_logits = torch.stack(old_logits)  # [G, max_len, V]
@@ -239,7 +241,7 @@ async def train_rl_loop(
         examples = await sample_examples(
             tokenizer, model, device, group_size * batch_size * 5
         )
-        save_examples_json(examples, f"data/examples_{round_ix}.json")
+        save_data_dir(examples, f"data/round_{round_ix}")
         dataset = ExampleGroupDataset(
             examples, group_size=group_size, pad_token_id=pad_token_id
         )
