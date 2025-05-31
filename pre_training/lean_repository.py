@@ -12,7 +12,7 @@ from models import smollm
 from pre_training.default import training_loop
 
 
-def main(repo_paths, tokenizer_path):
+def main(repo_paths, tokenizer_path, batch_size):
     # Load tokenizer (adjust path as needed)
     tokenizer = Tokenizer.from_file(tokenizer_path)
     pad_token_id = tokenizer.token_to_id("<pad>")
@@ -46,7 +46,7 @@ def main(repo_paths, tokenizer_path):
 
     train_loader = DataLoader(
         train_dataset,
-        batch_size=8,
+        batch_size=batch_size,
         shuffle=True,
         collate_fn=lambda b: {
             "input_ids": torch.stack([item["input_ids"] for item in b])
@@ -54,7 +54,7 @@ def main(repo_paths, tokenizer_path):
     )
     val_loader = DataLoader(
         val_dataset,
-        batch_size=8,
+        batch_size=batch_size,
         shuffle=False,
         collate_fn=lambda b: {
             "input_ids": torch.stack([item["input_ids"] for item in b])
@@ -97,5 +97,11 @@ if __name__ == "__main__":
         default="checkpoints/tokenizer.json",
         help="Path to the tokenizer JSON file",
     )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=8,
+        help="Batch size for training and validation dataloaders",
+    )
     args = parser.parse_args()
-    main(args.repo_path, args.tokenizer_path)
+    main(args.repo_path, args.tokenizer_path, args.batch_size)
