@@ -19,10 +19,10 @@ from utils.checkpoints import CheckpointManager
 
 
 def training_loop(
+    device,
     model,
     train_dataloader,
     val_dataloader,
-    device,
     padding_token_id,
     register_token_id,
     epochs=10,
@@ -51,6 +51,7 @@ def training_loop(
     scheduler = LambdaLR(optimizer, lr_lambda)
     criterion = torch.nn.CrossEntropyLoss(ignore_index=padding_token_id)
     writer = SummaryWriter(log_dir)
+    n_training_examples = len(train_dataloader)
 
     global_step = 0
 
@@ -60,7 +61,9 @@ def training_loop(
         train_loss = 0.0
         train_accuracy = 0
 
-        for batch_idx, batch in tqdm(enumerate(train_dataloader), leave=False):
+        for batch_idx, batch in tqdm(
+            enumerate(train_dataloader), total=n_training_examples, leave=False
+        ):
             input_ids = batch["input_ids"].to(device)  # shape: (B, T)
             input_ids_with_regs = interleave_register_tokens(
                 input_ids, register_token_id

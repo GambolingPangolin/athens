@@ -4,7 +4,7 @@ import argparse
 
 from tokenizers import Tokenizer
 import torch
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import ConcatDataset, DataLoader, random_split
 from transformers import LlamaForCausalLM
 
 from lean.dataset import LeanRepositoryDataset, TokenizedLeanDataset
@@ -12,7 +12,7 @@ from models import smollm
 from pre_training.default import training_loop
 
 
-def main(repo_path, tokenizer_path):
+def main(repo_paths, tokenizer_path):
     # Load tokenizer (adjust path as needed)
     tokenizer = Tokenizer.from_file(tokenizer_path)
     pad_token_id = tokenizer.token_to_id("<pad>")
@@ -23,13 +23,20 @@ def main(repo_path, tokenizer_path):
     n_chunk_tokens = 512
 
     # Create base dataset from repo
-    base_dataset = LeanRepositoryDataset(
-        repo_path, chunk_size=chunk_size_chars, chunk_stride=chunk_stride_chars
-    )
+
+    base_datasets = [
+        LeanRepositoryDataset(
+            repo_path, chunk_size=chunk_size_chars, chunk_stride=chunk_stride_chars
+        )
+        for repo_path in repo_paths
+    ]
 
     # Wrap base with tokenizer and fixed length tokenization
-    dataset = TokenizedLeanDataset(
-        base_dataset, tokenizer, n_chunk_tokens, pad_token_id
+    dataset = ConcatDataset(
+        [
+            TokenizedLeanDataset(base_dataset, tokenizer, n_chunk_tokens, pad_token_id)
+            for base_dataset in base_datasets
+        ]
     )
 
     # Split dataset into training and validation (e.g. 90% train, 10% val)
@@ -59,12 +66,12 @@ def main(repo_path, tokenizer_path):
 
     # Run training loop
     training_loop(
+        device,
         model,
         train_loader,
         val_loader,
         pad_token_id,
         register_token_id,
-        device=device,
         epochs=10,
         lr=5e-4,
         warmup_steps=1000,
@@ -78,7 +85,11 @@ def main(repo_path, tokenizer_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Pre-training on a Lean repository")
     parser.add_argument(
-        "--repo_path", type=str, required=True, help="Path to the root Lean repository"
+        "--repo_path",
+        type=str,
+        action="append",
+        required=True,
+        help="Path to the root Lean repository.  May be repeated.",
     )
     parser.add_argument(
         "--tokenizer_path",
