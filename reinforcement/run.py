@@ -9,7 +9,7 @@ import torch
 
 from models import smollm
 from reinforcement.training import training_loop
-from scripts.tokenize_lean_repository import VOCAB_SIZE
+from utils.constants import VOCAB_SIZE
 
 parser = argparse.ArgumentParser(description="RL fine-tune with DAPO loss")
 parser.add_argument(

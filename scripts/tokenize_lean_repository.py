@@ -5,9 +5,7 @@ import glob
 import os
 import sys
 from tokenizers import ByteLevelBPETokenizer
-
-VOCAB_SIZE = 600
-CKPT_DIR = "checkpoints"
+from utils.constants import CKPT_DIR, VOCAB_SIZE
 
 
 def main(mathlib_path):
