@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from loss.dapo import dapo_loss_vectorized
 from reinforcement.examples import sample_examples, save_data_dir
+from utils.constants import PBAR_WIDTH
 
 
 def form_groups(examples, group_size):
@@ -233,7 +234,7 @@ async def training_loop(
     model = model.to(device)
     model.train()
 
-    for round_ix in tqdm(range(rounds), desc="Rounds"):
+    for round_ix in tqdm(range(rounds), desc="Rounds", ncols=PBAR_WIDTH):
         examples = await sample_examples(
             tokenizer, model, device, group_size * batch_size * 5
         )
@@ -250,11 +251,11 @@ async def training_loop(
 
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 
-        for epoch in tqdm(range(epochs), desc="Epochs", leave=False):
+        for epoch in tqdm(range(epochs), desc="Epochs", leave=False, ncols=PBAR_WIDTH):
             total_loss = 0.0
 
             for step, (old_logits, actions, rewards, prompt_ids) in tqdm(
-                enumerate(dataloader), desc="Examples", leave=False
+                enumerate(dataloader), desc="Examples", leave=False, ncols=PBAR_WIDTH
             ):
                 # actions: [B, G, S], old_logits: [B, G, S, V], rewards: [B, G]
                 B, G, S = actions.shape

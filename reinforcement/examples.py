@@ -8,6 +8,7 @@ import torch
 from tqdm.asyncio import tqdm_asyncio
 
 from reinforcement.reward import reward_function
+from utils.constants import PBAR_WIDTH
 
 CONCURRENT_SAMPLES = 25
 
@@ -185,7 +186,9 @@ async def sample_examples(tokenizer, model, device, n_examples):
     ]
 
     sem = asyncio.Semaphore(CONCURRENT_SAMPLES)
-    pbar = tqdm_asyncio(desc="Generations", leave=False, total=n_examples)
+    pbar = tqdm_asyncio(
+        desc="Generations", ncols=PBAR_WIDTH, leave=False, total=n_examples
+    )
 
     async def get_example():
         sampled_module = random.choice(master_modules)

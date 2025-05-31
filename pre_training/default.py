@@ -16,6 +16,7 @@ from models.registers import (
     create_targets_fixed_offset,
 )
 from utils.checkpoints import CheckpointManager
+from utils.constants import PBAR_WIDTH
 
 
 def training_loop(
@@ -55,14 +56,17 @@ def training_loop(
 
     global_step = 0
 
-    for epoch in tqdm(range(epochs)):
+    for epoch in tqdm(range(epochs), ncols=PBAR_WIDTH):
         model.train()
         epoch_start = time.time()
         train_loss = 0.0
         train_accuracy = 0
 
         for batch_idx, batch in tqdm(
-            enumerate(train_dataloader), total=n_training_examples, leave=False
+            enumerate(train_dataloader),
+            total=n_training_examples,
+            leave=False,
+            ncols=PBAR_WIDTH,
         ):
             input_ids = batch["input_ids"].to(device)  # shape: (B, T)
             input_ids_with_regs = interleave_register_tokens(
