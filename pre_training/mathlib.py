@@ -59,9 +59,11 @@ def main(repo_path, tokenizer_path):
 
     # Run training loop
     training_loop(
-        model=model,
-        train_dataloader=train_loader,
-        val_dataloader=val_loader,
+        model,
+        train_loader,
+        val_loader,
+        pad_token_id,
+        register_token_id,
         device=device,
         epochs=10,
         lr=5e-4,
@@ -69,7 +71,6 @@ def main(repo_path, tokenizer_path):
         max_steps=100000,
         ckpt_dir="./checkpoints",
         log_dir="./logs",
-        register_token_id=register_token_id,
         max_offset=10,
     )
 

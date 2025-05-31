@@ -23,12 +23,15 @@ def interleave_register_tokens(
 
 
 def create_targets_fixed_offset(
-    input_ids: torch.Tensor, register_token_id: int, offset: int = 2
+    input_ids: torch.Tensor,
+    register_token_id: int,
+    padding_token_id: int,
+    offset: int = 2,
 ) -> torch.Tensor:
     batch_size, seq_len = input_ids.shape
     targets = torch.full(
         (batch_size, seq_len),
-        fill_value=-100,
+        fill_value=padding_token_id,
         dtype=torch.long,
         device=input_ids.device,
     )
@@ -47,7 +50,7 @@ def create_targets_fixed_offset(
                 if target_idx < len(reg_positions):
                     targets[b, i] = input_seq[reg_positions[target_idx]]
                 else:
-                    targets[b, i] = -100
+                    targets[b, i] = padding_token_id
             else:
                 # Register token: target = (i+offset)-th regular token
                 # Find the regular token at position >= i + offset counting only regular tokens
@@ -56,6 +59,6 @@ def create_targets_fixed_offset(
                 if target_reg_tokens:
                     targets[b, i] = input_seq[target_reg_tokens[0]]
                 else:
-                    targets[b, i] = -100
+                    targets[b, i] = padding_token_id
 
     return targets

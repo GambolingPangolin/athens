@@ -23,20 +23,21 @@ def training_loop(
     train_dataloader,
     val_dataloader,
     device,
+    padding_token_id,
+    register_token_id,
     epochs=10,
     lr=5e-4,
     warmup_steps=1000,
     max_steps=100000,
     ckpt_dir="./checkpoints",
     log_dir="./logs",
-    register_token_id=0,  # set your special token id here
     max_offset=10,
 ):
     model = model.to(device)
     optimizer = AdamW(model.parameters(), lr=lr)
-    checkpoint_manager = CheckpointManager(
-        ckpt_dir="./checkpoints", max_train=2, max_val=1
-    )
+
+    os.makedirs(ckpt_dir, exist_ok=True)
+    checkpoint_manager = CheckpointManager(ckpt_dir=ckpt_dir, max_train=2, max_val=1)
 
     # Linear warmup + cosine decay LR scheduler
     def lr_lambda(current_step):
@@ -48,16 +49,10 @@ def training_loop(
         return 0.5 * (1.0 + math.cos(math.pi * progress))
 
     scheduler = LambdaLR(optimizer, lr_lambda)
-
-    criterion = torch.nn.CrossEntropyLoss(
-        ignore_index=-100
-    )  # assuming -100 for padding if any
-
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=padding_token_id)
     writer = SummaryWriter(log_dir)
 
     global_step = 0
-
-    os.makedirs(ckpt_dir, exist_ok=True)
 
     for epoch in tqdm(range(epochs)):
         model.train()
@@ -73,7 +68,10 @@ def training_loop(
 
             offset = random.randint(0, max_offset)
             labels = create_targets_fixed_offset(
-                input_ids_with_regs.cpu(), register_token_id, offset=offset
+                input_ids_with_regs.cpu(),
+                register_token_id,
+                padding_token_id,
+                offset=offset,
             ).to(device)
 
             optimizer.zero_grad()
