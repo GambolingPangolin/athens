@@ -3,22 +3,8 @@
 import torch
 
 
-def is_regular_tokens(
-    input_ids: torch.Tensor, special_token_id: int
-) -> torch.BoolTensor:
-    """
-    Identify regular (non-special) tokens.
-    Args:
-        input_ids: LongTensor of shape (batch, seq_len)
-        special_token_id: int token ID of special token (e.g. <reg>)
-    Returns:
-        BoolTensor of shape (batch, seq_len), True if regular token.
-    """
-    return input_ids != special_token_id
-
-
 def interleave_register_tokens(
-    input_ids: torch.Tensor, special_token_id: int
+    input_ids: torch.Tensor, register_token_id: int
 ) -> torch.Tensor:
     # input_ids: (batch, seq_len)
     batch_size, seq_len = input_ids.size()
@@ -26,18 +12,18 @@ def interleave_register_tokens(
 
     interleaved = torch.full(
         (batch_size, new_seq_len),
-        fill_value=special_token_id,
+        fill_value=register_token_id,
         dtype=input_ids.dtype,
         device=input_ids.device,
     )
     interleaved[:, ::2] = input_ids  # copy regular tokens to even positions
-    # odd positions remain special_token_id
+    # odd positions remain register_token_id
 
     return interleaved
 
 
 def create_targets_fixed_offset(
-    input_ids: torch.Tensor, special_token_id: int, offset: int = 2
+    input_ids: torch.Tensor, register_token_id: int, offset: int = 2
 ) -> torch.Tensor:
     batch_size, seq_len = input_ids.shape
     targets = torch.full(
@@ -50,11 +36,11 @@ def create_targets_fixed_offset(
     for b in range(batch_size):
         input_seq = input_ids[b].tolist()
         reg_positions = [
-            i for i, t in enumerate(input_seq) if t != special_token_id
+            i for i, t in enumerate(input_seq) if t != register_token_id
         ]  # regular token indices
 
         for i in range(seq_len):
-            if input_seq[i] != special_token_id:
+            if input_seq[i] != register_token_id:
                 # Regular token: target = next regular token (i-th regular token → (i+1)-th regular token)
                 idx_in_reg = reg_positions.index(i)
                 target_idx = idx_in_reg + 1
@@ -73,41 +59,3 @@ def create_targets_fixed_offset(
                     targets[b, i] = -100
 
     return targets
-
-
-def build_attention_mask(
-    input_ids: torch.Tensor, special_token_id: int
-) -> torch.Tensor:
-    """
-    Build a causal attention mask with shape (batch, seq_len, seq_len)
-    where each position attends only to preceding regular tokens.
-
-    Args:
-        input_ids: LongTensor (batch, seq_len)
-        special_token_id: int
-    Returns:
-        LongTensor attention mask of shape (batch, seq_len, seq_len)
-    """
-    batch_size, seq_len = input_ids.shape
-    causal_mask = torch.tril(
-        torch.ones((seq_len, seq_len), dtype=torch.bool)
-    )  # causal mask
-
-    key_regular_mask = input_ids != special_token_id  # (batch, seq_len)
-
-    # Expand dims for broadcasting
-    causal_mask = causal_mask.unsqueeze(0).expand(
-        batch_size, -1, -1
-    )  # (batch, seq_len, seq_len)
-    key_regular_mask = key_regular_mask.unsqueeze(1).expand(
-        -1, seq_len, -1
-    )  # (batch, seq_len, seq_len)
-    diag_mask = (
-        torch.eye(seq_len, dtype=torch.bool, device=input_ids.device)
-        .unsqueeze(0)
-        .expand(batch_size, -1, -1)
-    )
-
-    # Attend only to regular tokens in keys dimension where causal_mask allows
-    attention_mask = causal_mask & key_regular_mask | diag_mask
-    return attention_mask

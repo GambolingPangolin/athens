@@ -14,7 +14,6 @@ from tqdm import tqdm
 from models.registers import (
     interleave_register_tokens,
     create_targets_fixed_offset,
-    build_attention_mask,
 )
 from utils.checkpoints import CheckpointManager
 
@@ -77,17 +76,11 @@ def training_loop(
                 input_ids_with_regs.cpu(), register_token_id, offset=offset
             ).to(device)
 
-            attention_mask = build_attention_mask(
-                input_ids_with_regs.cpu(), register_token_id
-            ).to(device)
-            attention_mask = attention_mask.unsqueeze(1).expand(
-                -1, model.model.layers[0].self_attn.n_head, -1, -1
-            )
-
             optimizer.zero_grad()
-            logits = model(
-                input_ids_with_regs, mask=attention_mask
-            )  # (B, T, vocab_size)
+            logits = model.forward(
+                input_ids_with_regs,
+                attention_mask=(input_ids_with_regs != register_token_id),
+            ).logits  # (B, T, vocab_size)
 
             with torch.no_grad():
                 preds = logits.argmax(dim=-1)  # (B, T)
@@ -141,7 +134,7 @@ def training_loop(
                 input_ids = batch["input_ids"].to(device)
                 labels = batch.get("labels", input_ids).to(device)
 
-                logits = model(input_ids)
+                logits = model.forward(input_ids).logits
                 shift_logits = logits[:, :-1, :].contiguous()
                 shift_labels = labels[:, 1:].contiguous()
                 loss = criterion(

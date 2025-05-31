@@ -55,7 +55,7 @@ def generate_mathlib_example(
 
     with torch.no_grad():
         for _ in range(max_gen_tokens):
-            outputs = model(input_ids)  # (1, seq_len, vocab_size)
+            outputs = model.forward(input_ids).logits  # (1, seq_len, vocab_size)
             logits = outputs[0, -1, :]  # last token logits: (vocab_size,)
             logits_list.append(logits.cpu())
 

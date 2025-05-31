@@ -202,7 +202,7 @@ def get_logits_with_prompt_batch(
         gen_tokens = generated_token_ids_batch[i].to(device)
         input_ids[i, prompt_len : prompt_len + gen_lens] = gen_tokens
 
-    logits_all = model(input_ids)
+    logits_all = model.forward(input_ids).logits
 
     vocab_size = logits_all.size(-1)
     logits_generated = torch.zeros(

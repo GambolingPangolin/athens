@@ -5,9 +5,10 @@ import argparse
 from tokenizers import Tokenizer
 import torch
 from torch.utils.data import DataLoader, random_split
+from transformers import LlamaForCausalLM
 
 from lean.dataset import LeanRepositoryDataset, TokenizedLeanDataset
-from models.smollm import LlamaForCausalLM
+from models import smollm
 from pre_training.default import training_loop
 
 
@@ -54,7 +55,7 @@ def main(repo_path, tokenizer_path):
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = LlamaForCausalLM(vocab_size=tokenizer.get_vocab_size()).to(device)
+    model = LlamaForCausalLM(smollm.config(tokenizer.get_vocab_size())).to(device)
 
     # Run training loop
     training_loop(

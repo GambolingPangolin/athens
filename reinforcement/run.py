@@ -7,7 +7,7 @@ import asyncio
 from tokenizers import Tokenizer
 import torch
 
-from models.smollm import LlamaForCausalLM
+from models import smollm
 from reinforcement.training import training_loop
 from scripts.tokenize_lean_repository import VOCAB_SIZE
 
@@ -48,7 +48,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 tokenizer = Tokenizer.from_file(args.tokenizer_path)
 pad_token_id = tokenizer.token_to_id("<pad>")
 # Load model
-model = LlamaForCausalLM(vocab_size=VOCAB_SIZE)
+model = LlamaForCausalLM(smollm.config(VOCAB_SIZE))
 ckpt = torch.load(args.init_checkpoint, map_location=device)
 model.load_state_dict(ckpt["model_state_dict"])
 
